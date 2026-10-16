@@ -24,7 +24,8 @@ const COMMAND_ALIASES: Record<string, string> = {
   help: 'help',
   list: 'list',
   mylist: 'list',
-  removegame: 'list',
+  remove: 'remove',
+  removegame: 'remove',
   add: 'add',
   addgame: 'add',
   check: 'check',
@@ -337,6 +338,8 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
         return checkNow(user);
       case 'region':
         return askRegion(user);
+      case 'remove':
+        return send(chatId)(views.removePicker(await repo.listGames(chatId)));
       case 'clear':
         return confirmClear(chatId, send(chatId));
       case 'cancel':
@@ -345,13 +348,21 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
   }
 
   function menuCommand(input: string): string | null {
-    if (input === MENU.list || input === LEGACY_MENU.remove) return 'list';
-    if (input === MENU.add) return 'add';
+    if (input === MENU.list) return 'list';
+    if (input === MENU.add || input === LEGACY_MENU.add) return 'add';
     if (input === MENU.check) return 'check';
+    if (input === MENU.remove || input === LEGACY_MENU.remove) return 'remove';
+    if (input === MENU.clear || input === LEGACY_MENU.clear) return 'clear';
     if (input === MENU.help) return 'help';
-    if (input === LEGACY_MENU.clear) return 'clear';
     if (input.startsWith(MENU.regionPrefix)) return 'region';
     return null;
+  }
+
+  // A button label that isn't on the current keyboard means the user still has an older one.
+  function isOutdatedMenuLabel(input: string): boolean {
+    const current: string[] = [MENU.list, MENU.add, MENU.check, MENU.remove, MENU.clear, MENU.help];
+    if (input.startsWith(MENU.regionPrefix)) return !input.startsWith(`${MENU.regionPrefix} Set Region`);
+    return !current.includes(input);
   }
 
   async function onMessage(message: TgMessage) {
@@ -370,6 +381,10 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
         user = { ...user, pending: null };
       }
       await runCommand(user, command, parsed?.arg ?? '');
+      // Swap in the current keyboard. Region and help replies already carry it.
+      if (!parsed && command !== 'region' && command !== 'help' && isOutdatedMenuLabel(input)) {
+        await tg.sendMessage(chatId, text.menuUpdated(), views.mainMenu(user.region));
+      }
       return;
     }
 

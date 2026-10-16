@@ -51,7 +51,8 @@ describe('bot', () => {
       expect(tg.last().markup).toEqual({
         keyboard: [
           [{ text: MENU.list }, { text: MENU.add }],
-          [{ text: MENU.check }, { text: '🌍 Region 🇩🇪' }],
+          [{ text: MENU.check }, { text: MENU.remove }],
+          [{ text: MENU.clear }, { text: '🌍 Set Region 🇩🇪' }],
           [{ text: MENU.help }],
         ],
         resize_keyboard: true,
@@ -182,7 +183,15 @@ describe('bot', () => {
     it('lists games with buttons to manage each', async () => {
       await say(MENU.list);
       expect(tg.last().text).toContain('Your games (2/');
-      expect(tg.buttons().map((b) => b.data)).toEqual(['game:10', 'game:11', 'clear']);
+      expect(tg.buttons().map((b) => b.data)).toEqual(['game:10', 'game:11']);
+    });
+
+    it('Remove Game offers each game as a remove button', async () => {
+      await say(MENU.remove);
+      expect(tg.buttons()).toEqual([
+        { text: '❌ Hades', data: 'remove:10' },
+        { text: '❌ Celeste', data: 'remove:11' },
+      ]);
     });
 
     it('removes a game from its card and edits the message in place', async () => {
@@ -201,10 +210,19 @@ describe('bot', () => {
       expect(await repo.listGames(CHAT)).toHaveLength(0);
     });
 
-    it('keeps v1 keyboard buttons working', async () => {
+    it('keeps old keyboard buttons working and swaps in the current keyboard', async () => {
       await say('➖ Remove Game');
-      expect(tg.last().text).toContain('Your games');
+      expect(tg.sent.at(-2)?.text).toContain('stop tracking');
+      expect(tg.last().text).toContain('Menu updated');
+      expect(tg.last().markup).toHaveProperty('keyboard');
+
       await say('🗑 Clear List');
+      expect(tg.sent.at(-2)?.text).toContain('Remove all 2 game(s)');
+      expect(tg.last().text).toContain('Menu updated');
+    });
+
+    it('does not resend the keyboard for current buttons', async () => {
+      await say(MENU.clear);
       expect(tg.last().text).toContain('Remove all 2 game(s)');
     });
   });

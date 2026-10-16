@@ -12,16 +12,21 @@ export interface View {
   markup?: InlineKeyboard;
 }
 
+// Only symbols that render as color emoji everywhere: ➕ ➖ and 🗑 (without VS16) show up grey on iOS.
 export const MENU = {
   list: '📋 My List',
-  add: '➕ Add Game',
+  add: '🔍 Add Game',
   check: '🔄 Check Now',
+  remove: '❌ Remove Game',
+  clear: '🧹 Clear List',
   help: '❓ Help',
+  // The region button also shows the current flag, so it's matched by prefix.
   regionPrefix: '🌍',
 } as const;
 
-// Labels from the v1 keyboard. Users keep seeing an old keyboard until we send them a new one.
+// Labels from older keyboards. Users keep seeing an old keyboard until we send them a new one.
 export const LEGACY_MENU = {
+  add: '➕ Add Game',
   remove: '➖ Remove Game',
   clear: '🗑 Clear List',
 } as const;
@@ -29,7 +34,8 @@ export const LEGACY_MENU = {
 export function mainMenu(region: string | null): ReplyKeyboard {
   return replyKeyboard([
     [MENU.list, MENU.add],
-    [MENU.check, `${MENU.regionPrefix} Region ${flagEmoji(region)}`],
+    [MENU.check, MENU.remove],
+    [MENU.clear, `${MENU.regionPrefix} Set Region ${flagEmoji(region)}`],
     [MENU.help],
   ]);
 }
@@ -54,12 +60,13 @@ export const text = {
       '<b>How it works</b>',
       `Track up to ${LIMITS.maxGamesPerUser} games. Once a day I check Steam and message you when a game starts matching its alert - once per sale, not every day.`,
       '',
-      `${MENU.list} - your games; tap one to change its alert or remove it`,
+      `${MENU.list} - your games; tap one to change its alert`,
       `${MENU.add} - search Steam and start tracking a game`,
       `${MENU.check} - check all your games right now`,
-      `${MENU.regionPrefix} Region - change the store country/currency`,
+      `${MENU.remove} / ${MENU.clear} - stop tracking one or all games`,
+      `${MENU.regionPrefix} Set Region - change the store country/currency`,
       '',
-      'You can also type: /add <i>name</i>, /list, /check, /region, /cancel',
+      'You can also type: /add <i>name</i>, /list, /check, /remove, /clear, /region, /cancel',
     ].join('\n'),
 
   askRegion: () => "What's your Steam store country? Send a 2-letter code, e.g. <code>US</code>, <code>TR</code>, <code>DE</code>.",
@@ -79,7 +86,7 @@ export const text = {
   searchFailed: () => "Steam's search isn't responding right now. Try again in a minute.",
   noResults: (query: string) => `Nothing found for "<b>${escapeHtml(query)}</b>". Try a different spelling or a shorter name.`,
   limitReached: () =>
-    `You're tracking the maximum of ${LIMITS.maxGamesPerUser} games. Remove one from ${MENU.list} to make room.`,
+    `You're tracking the maximum of ${LIMITS.maxGamesPerUser} games. Tap ${MENU.remove} to make room.`,
   notAvailable: () => "That game isn't available in your region's store.",
   notTracked: () => "You're not tracking that game anymore.",
 
@@ -99,7 +106,8 @@ export const text = {
     `<b>${escapeHtml(name)}</b> has no price in your region's store (free or not sold there), so a price alert can't work.`,
 
   alertSaved: () => '✅ Alert saved.',
-  removed: (name: string) => `🗑 Stopped tracking <b>${escapeHtml(name)}</b>.`,
+  removed: (name: string) => `❌ Stopped tracking <b>${escapeHtml(name)}</b>.`,
+  menuUpdated: () => '⌨️ Menu updated.',
   cancelled: () => 'OK, cancelled.',
   nothingToCancel: () => 'Nothing to cancel.',
   unknown: () => 'Not sure what you mean - use the menu below, or /help.',
@@ -127,11 +135,20 @@ export function gameList(games: TrackedGame[]): View {
   if (!games.length) return { text: text.emptyList() };
   const lines = games.map((g, i) => `${i + 1}. ${gameLink(g.appId, g.name)} - <i>${escapeHtml(describeAlert(g.alert))}</i>`);
   return {
-    text: [`<b>Your games (${games.length}/${LIMITS.maxGamesPerUser})</b>`, '', ...lines, '', 'Tap a game to change its alert or remove it.'].join('\n'),
-    markup: inlineKeyboard([
-      ...games.map((g) => [{ text: truncate(g.name), callback_data: encode({ type: 'game', appId: g.appId }) }]),
-      [{ text: '🗑 Clear list', callback_data: encode({ type: 'clear' }) }],
-    ]),
+    text: [`<b>Your games (${games.length}/${LIMITS.maxGamesPerUser})</b>`, '', ...lines, '', 'Tap a game to see its price or change its alert.'].join('\n'),
+    markup: inlineKeyboard(
+      games.map((g) => [{ text: truncate(g.name), callback_data: encode({ type: 'game', appId: g.appId }) }]),
+    ),
+  };
+}
+
+export function removePicker(games: TrackedGame[]): View {
+  if (!games.length) return { text: text.emptyList() };
+  return {
+    text: 'Tap a game to stop tracking it:',
+    markup: inlineKeyboard(
+      games.map((g) => [{ text: `❌ ${truncate(g.name)}`, callback_data: encode({ type: 'remove', appId: g.appId }) }]),
+    ),
   };
 }
 
@@ -154,7 +171,7 @@ export function gameCard(game: TrackedGame, price: Price | null | undefined, not
     markup: inlineKeyboard([
       [
         { text: '✏️ Change alert', callback_data: encode({ type: 'alert', appId: game.appId }) },
-        { text: '🗑 Remove', callback_data: encode({ type: 'remove', appId: game.appId }) },
+        { text: '❌ Remove', callback_data: encode({ type: 'remove', appId: game.appId }) },
       ],
       [
         { text: '🛒 Store page', url: storeUrl(game.appId) },
