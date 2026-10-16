@@ -16,6 +16,7 @@ export const MENU = {
   list: '📋 My List',
   add: '➕ Add Game',
   check: '🔄 Check Now',
+  help: '❓ Help',
   regionPrefix: '🌍',
 } as const;
 
@@ -29,6 +30,7 @@ export function mainMenu(region: string | null): ReplyKeyboard {
   return replyKeyboard([
     [MENU.list, MENU.add],
     [MENU.check, `${MENU.regionPrefix} Region ${flagEmoji(region)}`],
+    [MENU.help],
   ]);
 }
 
@@ -57,7 +59,7 @@ export const text = {
       `${MENU.check} - check all your games right now`,
       `${MENU.regionPrefix} Region - change the store country/currency`,
       '',
-      'Commands: /add <i>name</i>, /list, /check, /region, /cancel, /help',
+      'You can also type: /add <i>name</i>, /list, /check, /region, /cancel',
     ].join('\n'),
 
   askRegion: () => "What's your Steam store country? Send a 2-letter code, e.g. <code>US</code>, <code>TR</code>, <code>DE</code>.",

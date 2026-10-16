@@ -48,7 +48,21 @@ describe('bot', () => {
       repo.seedUser(CHAT, 'DE');
       await say('/start');
       expect(tg.last().text).toContain('Welcome back');
-      expect(tg.last().markup).toHaveProperty('keyboard');
+      expect(tg.last().markup).toEqual({
+        keyboard: [
+          [{ text: MENU.list }, { text: MENU.add }],
+          [{ text: MENU.check }, { text: '🌍 Region 🇩🇪' }],
+          [{ text: MENU.help }],
+        ],
+        resize_keyboard: true,
+        is_persistent: true,
+      });
+    });
+
+    it('opens help from the keyboard button', async () => {
+      repo.seedUser(CHAT, 'DE');
+      await say(MENU.help);
+      expect(tg.last().text).toContain('How it works');
     });
 
     it('drops price alerts when the region changes', async () => {

@@ -348,6 +348,7 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
     if (input === MENU.list || input === LEGACY_MENU.remove) return 'list';
     if (input === MENU.add) return 'add';
     if (input === MENU.check) return 'check';
+    if (input === MENU.help) return 'help';
     if (input === LEGACY_MENU.clear) return 'clear';
     if (input.startsWith(MENU.regionPrefix)) return 'region';
     return null;

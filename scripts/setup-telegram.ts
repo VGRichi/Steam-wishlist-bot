@@ -1,4 +1,4 @@
-// One-time (and re-runnable) Telegram setup: webhook with secret token, command menu, bot description.
+// One-time (and re-runnable) Telegram setup: webhook with secret token and bot description.
 // Usage: npm run setup:telegram -- https://your-project.vercel.app
 import 'dotenv/config';
 import { config } from '../src/config.js';
@@ -24,16 +24,9 @@ async function main() {
   });
   console.log(`Webhook set to ${url}`);
 
-  await callTelegram('setMyCommands', {
-    commands: [
-      { command: 'list', description: 'Your tracked games' },
-      { command: 'add', description: 'Track a game: /add <name>' },
-      { command: 'check', description: 'Check prices right now' },
-      { command: 'region', description: 'Change store region' },
-      { command: 'cancel', description: 'Cancel what you were doing' },
-      { command: 'help', description: 'How the bot works' },
-    ],
-  });
+  // No slash-command menu: Telegram's "Menu" list hides the emoji button keyboard, which is the
+  // bot's real menu. Typed commands still work.
+  await callTelegram('deleteMyCommands', {});
   await callTelegram('setMyShortDescription', {
     short_description: 'Get a message when Steam games you want go on sale.',
   });
@@ -41,7 +34,7 @@ async function main() {
     description:
       "Track Steam games and I'll message you when they go on sale - at any discount, past a % you pick, or under a price you set. Prices are checked in your own region's currency.",
   });
-  console.log('Commands and description updated.');
+  console.log('Command menu removed, description updated.');
 
   const info = await callTelegram<{ pending_update_count: number; last_error_message?: string }>('getWebhookInfo', {});
   console.log('Webhook info:', info);
