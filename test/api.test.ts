@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const handleUpdate = vi.fn(async () => undefined);
 const runPriceCheck = vi.fn(async () => ({ notifiedUsers: 0 }));
 
-vi.mock('../src/app', () => ({ getBot: () => ({ handleUpdate }), getDeps: () => ({}) }));
-vi.mock('../src/jobs/priceCheck', () => ({ runPriceCheck: () => runPriceCheck() }));
+vi.mock('../src/app.js', () => ({ getBot: () => ({ handleUpdate }), getDeps: () => ({}) }));
+vi.mock('../src/jobs/priceCheck.js', () => ({ runPriceCheck: () => runPriceCheck() }));
 
-const { POST } = await import('../api/webhook');
-const { GET: cron } = await import('../api/cron');
+const { POST } = await import('../api/webhook.js');
+const { GET: cron } = await import('../api/cron.js');
 
 describe('webhook endpoint', () => {
   beforeEach(() => {

@@ -1,6 +1,6 @@
-import { config } from '../config';
-import { log, sleep } from '../log';
-import type { InlineKeyboard, ReplyMarkup, SendResult, TelegramClient } from './types';
+import { config } from '../config.js';
+import { log, sleep } from '../log.js';
+import type { InlineKeyboard, ReplyMarkup, SendResult, TelegramClient } from './types.js';
 
 interface ApiResponse<T> {
   ok: boolean;

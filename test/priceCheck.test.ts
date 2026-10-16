@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { runPriceCheck } from '../src/jobs/priceCheck';
-import { FakeSteam, FakeTelegram, MemoryRepo, price } from './fakes';
+import { runPriceCheck } from '../src/jobs/priceCheck.js';
+import { FakeSteam, FakeTelegram, MemoryRepo, price } from './fakes.js';
 
 describe('runPriceCheck', () => {
   let repo: MemoryRepo;

@@ -1,4 +1,4 @@
-import type { Price } from '../steam/api';
+import type { Price } from '../steam/api.js';
 
 export interface PriceLimit {
   cents: number;

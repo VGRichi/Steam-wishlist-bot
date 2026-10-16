@@ -1,4 +1,4 @@
-import type { InlineButton, InlineKeyboard, ReplyKeyboard } from './types';
+import type { InlineButton, InlineKeyboard, ReplyKeyboard } from './types.js';
 
 // Every piece of text not written by us (game names, user input) must go through this
 // before it's put in an HTML-mode message, or Telegram rejects the whole message.

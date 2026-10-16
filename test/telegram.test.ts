@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { decode, encode, type Callback } from '../src/bot/callbacks';
-import { parseCommand } from '../src/bot/handlers';
-import { secretsMatch } from '../src/security';
-import { escapeHtml, flagEmoji, truncate } from '../src/telegram/format';
+import { decode, encode, type Callback } from '../src/bot/callbacks.js';
+import { parseCommand } from '../src/bot/handlers.js';
+import { secretsMatch } from '../src/security.js';
+import { escapeHtml, flagEmoji, truncate } from '../src/telegram/format.js';
 
 describe('callback data', () => {
   const samples: Callback[] = [

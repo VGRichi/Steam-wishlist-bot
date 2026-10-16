@@ -1,4 +1,4 @@
-import type { Alert } from '../domain/alert';
+import type { Alert } from '../domain/alert.js';
 
 // What the bot is waiting for in the user's next plain-text message.
 // Stored as JSON in users.pending because serverless functions keep no memory between requests.

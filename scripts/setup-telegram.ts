@@ -1,8 +1,8 @@
 // One-time (and re-runnable) Telegram setup: webhook with secret token, command menu, bot description.
 // Usage: npm run setup:telegram -- https://your-project.vercel.app
 import 'dotenv/config';
-import { config } from '../src/config';
-import { callTelegram } from '../src/telegram/api';
+import { config } from '../src/config.js';
+import { callTelegram } from '../src/telegram/api.js';
 
 async function main() {
   const deployedUrl = process.argv[2];

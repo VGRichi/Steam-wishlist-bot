@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createBot } from '../src/bot/handlers';
-import { MENU } from '../src/bot/views';
-import { LIMITS } from '../src/config';
-import { callbackUpdate, FakeSteam, FakeTelegram, MemoryRepo, price, textUpdate } from './fakes';
+import { createBot } from '../src/bot/handlers.js';
+import { MENU } from '../src/bot/views.js';
+import { LIMITS } from '../src/config.js';
+import { callbackUpdate, FakeSteam, FakeTelegram, MemoryRepo, price, textUpdate } from './fakes.js';
 
 const CHAT = 42;
 

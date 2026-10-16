@@ -1,6 +1,6 @@
-import type { Pending, Repo, Subscription, TrackedGame, User } from '../src/db/types';
-import type { AppDetails, Price, PriceLookup, SearchResult, SteamClient } from '../src/steam/api';
-import type { InlineKeyboard, ReplyMarkup, SendResult, TelegramClient, TgUpdate } from '../src/telegram/types';
+import type { Pending, Repo, Subscription, TrackedGame, User } from '../src/db/types.js';
+import type { AppDetails, Price, PriceLookup, SearchResult, SteamClient } from '../src/steam/api.js';
+import type { InlineKeyboard, ReplyMarkup, SendResult, TelegramClient, TgUpdate } from '../src/telegram/types.js';
 
 interface StoredUser extends User {
   blocked: boolean;

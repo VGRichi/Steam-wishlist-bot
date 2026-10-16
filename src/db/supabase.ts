@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { config } from '../config';
-import type { Pending, Repo, Subscription, TrackedGame, User } from './types';
+import { config } from '../config.js';
+import type { Pending, Repo, Subscription, TrackedGame, User } from './types.js';
 
 interface UserRow {
   chat_id: number;

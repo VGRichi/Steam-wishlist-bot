@@ -1,5 +1,5 @@
-import { LIMITS } from '../config';
-import { sleep } from '../log';
+import { LIMITS } from '../config.js';
+import { sleep } from '../log.js';
 
 // Steam reports every currency in hundredths of the display unit (USD cents, JPY "sen"),
 // so "cents" below is that minor unit regardless of currency.

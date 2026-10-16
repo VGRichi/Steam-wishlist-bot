@@ -1,8 +1,8 @@
-import { getDeps } from '../src/app';
-import { config } from '../src/config';
-import { runPriceCheck } from '../src/jobs/priceCheck';
-import { log } from '../src/log';
-import { secretsMatch } from '../src/security';
+import { getDeps } from '../src/app.js';
+import { config } from '../src/config.js';
+import { runPriceCheck } from '../src/jobs/priceCheck.js';
+import { log } from '../src/log.js';
+import { secretsMatch } from '../src/security.js';
 
 // Vercel Cron calls this daily (see vercel.json) with "Authorization: Bearer $CRON_SECRET".
 export async function GET(request: Request): Promise<Response> {

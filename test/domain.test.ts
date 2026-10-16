@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { describeAlert, formatMoney, isTriggered, type Alert } from '../src/domain/alert';
-import { parsePercent, parsePriceCents, parseRegion } from '../src/domain/parse';
-import { price } from './fakes';
+import { describeAlert, formatMoney, isTriggered, type Alert } from '../src/domain/alert.js';
+import { parsePercent, parsePriceCents, parseRegion } from '../src/domain/parse.js';
+import { price } from './fakes.js';
 
 describe('parseRegion', () => {
   it.each([

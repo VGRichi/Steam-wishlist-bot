@@ -1,9 +1,9 @@
-import { isTriggered } from '../domain/alert';
-import type { Repo, Subscription } from '../db/types';
-import { log, sleep } from '../log';
-import type { PriceLookup, SteamClient } from '../steam/api';
-import type { TelegramClient } from '../telegram/types';
-import { saleNotification, type SaleNotice } from '../bot/views';
+import { isTriggered } from '../domain/alert.js';
+import type { Repo, Subscription } from '../db/types.js';
+import { log, sleep } from '../log.js';
+import type { PriceLookup, SteamClient } from '../steam/api.js';
+import type { TelegramClient } from '../telegram/types.js';
+import { saleNotification, type SaleNotice } from '../bot/views.js';
 
 export interface PriceCheckDeps {
   repo: Repo;

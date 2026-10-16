@@ -1,13 +1,13 @@
-import { LIMITS } from '../config';
-import { ANY_DISCOUNT, isTriggered, type Alert } from '../domain/alert';
-import { parsePercent, parsePriceCents, parseRegion } from '../domain/parse';
-import type { Pending, Repo, TrackedGame, User } from '../db/types';
-import { log } from '../log';
-import { isKnownRegion, type Price, type SteamClient } from '../steam/api';
-import type { TelegramClient, TgCallbackQuery, TgMessage, TgUpdate } from '../telegram/types';
-import { decode } from './callbacks';
-import * as views from './views';
-import { LEGACY_MENU, MENU, text, type View } from './views';
+import { LIMITS } from '../config.js';
+import { ANY_DISCOUNT, isTriggered, type Alert } from '../domain/alert.js';
+import { parsePercent, parsePriceCents, parseRegion } from '../domain/parse.js';
+import type { Pending, Repo, TrackedGame, User } from '../db/types.js';
+import { log } from '../log.js';
+import { isKnownRegion, type Price, type SteamClient } from '../steam/api.js';
+import type { TelegramClient, TgCallbackQuery, TgMessage, TgUpdate } from '../telegram/types.js';
+import { decode } from './callbacks.js';
+import * as views from './views.js';
+import { LEGACY_MENU, MENU, text, type View } from './views.js';
 
 export interface BotDeps {
   repo: Repo;

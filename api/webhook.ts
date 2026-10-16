@@ -1,8 +1,8 @@
-import { getBot } from '../src/app';
-import { config } from '../src/config';
-import { log } from '../src/log';
-import { secretsMatch } from '../src/security';
-import type { TgUpdate } from '../src/telegram/types';
+import { getBot } from '../src/app.js';
+import { config } from '../src/config.js';
+import { log } from '../src/log.js';
+import { secretsMatch } from '../src/security.js';
+import type { TgUpdate } from '../src/telegram/types.js';
 
 // Telegram -> bot. Set up with `npm run setup:telegram`, which registers the secret token.
 export async function POST(request: Request): Promise<Response> {

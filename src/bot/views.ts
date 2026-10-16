@@ -1,11 +1,11 @@
 // Every message the bot sends, as pure functions of data. No I/O here, so it's all unit-testable.
-import { LIMITS } from '../config';
-import { describeAlert, formatMoney, formatPrice, isTriggered } from '../domain/alert';
-import type { TrackedGame } from '../db/types';
-import { storeUrl, type Price, type SearchResult } from '../steam/api';
-import { escapeHtml, flagEmoji, inlineKeyboard, replyKeyboard, truncate } from '../telegram/format';
-import type { InlineKeyboard, ReplyKeyboard } from '../telegram/types';
-import { encode } from './callbacks';
+import { LIMITS } from '../config.js';
+import { describeAlert, formatMoney, formatPrice, isTriggered } from '../domain/alert.js';
+import type { TrackedGame } from '../db/types.js';
+import { storeUrl, type Price, type SearchResult } from '../steam/api.js';
+import { escapeHtml, flagEmoji, inlineKeyboard, replyKeyboard, truncate } from '../telegram/format.js';
+import type { InlineKeyboard, ReplyKeyboard } from '../telegram/types.js';
+import { encode } from './callbacks.js';
 
 export interface View {
   text: string;
