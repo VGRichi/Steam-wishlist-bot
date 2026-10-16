@@ -32,7 +32,7 @@ describe('bot', () => {
       expect(tg.last().text).toContain("doesn't look like a country code");
 
       await say('tr');
-      expect(tg.last().text).toContain('Region set to');
+      expect(tg.sent.at(-2)?.text).toContain('Region set to');
       expect((await repo.getUser(CHAT))?.region).toBe('TR');
       expect((await repo.getUser(CHAT))?.pending).toBeNull();
     });
@@ -43,12 +43,13 @@ describe('bot', () => {
       expect((await repo.getUser(CHAT))?.pending).toEqual({ kind: 'region' });
     });
 
-    it('greets returning users, clears any old keyboard and sets their command menu', async () => {
+    it('greets returning users, clears any old keyboard, sets their command menu and opens the panel', async () => {
       repo.seedUser(CHAT, 'DE');
       await say('/start');
-      expect(tg.last().text).toContain('Welcome back');
-      expect(tg.last().markup).toEqual({ remove_keyboard: true });
-      expect(tg.chatCommands.get(CHAT)?.map((c) => c.command)).toEqual(['list', 'add', 'check', 'help', 'remove', 'region']);
+      expect(tg.sent.at(-2)?.text).toContain('Welcome back');
+      expect(tg.sent.at(-2)?.markup).toEqual({ remove_keyboard: true });
+      expect(tg.last().text).toContain('🏠');
+      expect(tg.chatCommands.get(CHAT)?.map((c) => c.command)).toEqual(['menu', 'list', 'add', 'check', 'help', 'region']);
       expect(tg.chatCommands.get(CHAT)?.at(-1)?.description).toBe('🌍 Change region (now 🇩🇪 DE)');
     });
 
@@ -71,7 +72,7 @@ describe('bot', () => {
       repo.seedGame(CHAT, { appId: 10, alert: { minDiscountPercent: 20, maxPrice: { cents: 1500, currency: 'USD' } } });
       await say('/region');
       await say('TR');
-      expect(tg.last().text).toContain('Price alerts on 1 game(s)');
+      expect(tg.sent.at(-2)?.text).toContain('Price alerts on 1 game(s)');
       expect((await repo.getGame(CHAT, 10))?.alert).toEqual({ minDiscountPercent: 20, maxPrice: null });
     });
   });
@@ -183,7 +184,7 @@ describe('bot', () => {
     it('lists games with buttons to manage each', async () => {
       await say('/list');
       expect(tg.last().text).toContain('Your games (2/');
-      expect(tg.buttons().map((b) => b.data)).toEqual(['game:10', 'game:11']);
+      expect(tg.buttons().map((b) => b.data)).toEqual(['game:10', 'game:11', 'go:home']);
     });
 
     it('/remove offers each game as a remove button, plus remove all', async () => {
@@ -192,6 +193,7 @@ describe('bot', () => {
         { text: '❌ Hades', data: 'remove:10' },
         { text: '❌ Celeste', data: 'remove:11' },
         { text: '🧹 Remove all', data: 'clear' },
+        { text: '🏠 Home', data: 'go:home' },
       ]);
     });
 
@@ -228,6 +230,46 @@ describe('bot', () => {
     it('commands do not trigger the keyboard notice', async () => {
       await say('/clear');
       expect(tg.last().text).toContain('Remove all 2 game(s)');
+    });
+  });
+
+  describe('home panel', () => {
+    beforeEach(() => {
+      repo.seedUser(CHAT, 'TR');
+      repo.seedGame(CHAT, { appId: 10, name: 'Hades', lastConditionMet: true });
+      repo.seedGame(CHAT, { appId: 11, name: 'Celeste' });
+      steam.setPrice('TR', 10, price(500, 75));
+      steam.setPrice('TR', 11, price(500, 0));
+    });
+
+    it('/menu shows saved counts, region and next check without calling Steam', async () => {
+      await say('/menu');
+      const panel = tg.last().text;
+      expect(panel).toContain('Tracking <b>2</b> of 10');
+      expect(panel).toContain('<b>1</b> matched your alerts');
+      expect(panel).toContain('🇹🇷 TR · next check in 12h'); // clock is 12:00 UTC, check runs at 00:00 UTC
+      expect(steam.calls.getPrices).toBe(0);
+      expect(tg.buttons().map((b) => b.data)).toEqual(['go:list', 'go:search', 'go:check', 'go:remove', 'go:region', 'go:help']);
+    });
+
+    it.each([
+      ['go:list', 'Your games'],
+      ['go:remove', 'stop tracking'],
+      ['go:help', 'How it works'],
+      ['go:check', 'Price check'],
+    ])('%s edits the panel in place and offers a way home', async (data, expected) => {
+      await tap(data);
+      expect(tg.last().editedFrom).toBe(500);
+      expect(tg.last().text).toContain(expected);
+      expect(tg.buttons().some((b) => b.data === 'go:home')).toBe(true);
+    });
+
+    it('Add Game from the panel waits for a name; Home cancels it', async () => {
+      await tap('go:search');
+      expect((await repo.getUser(CHAT))?.pending).toEqual({ kind: 'search' });
+      await tap('go:home');
+      expect((await repo.getUser(CHAT))?.pending).toBeNull();
+      expect(tg.last().text).toContain('🏠');
     });
   });
 

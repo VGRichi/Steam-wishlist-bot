@@ -10,7 +10,7 @@ interface ApiResponse<T> {
   parameters?: { retry_after?: number };
 }
 
-export class TelegramApiError extends Error {
+class TelegramApiError extends Error {
   constructor(
     readonly method: string,
     readonly code: number,

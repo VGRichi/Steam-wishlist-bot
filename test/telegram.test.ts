@@ -11,7 +11,8 @@ describe('callback data', () => {
     { type: 'alert', appId: 2_147_483_647 },
     { type: 'set', mode: 'both', appId: 292030 },
     { type: 'remove', appId: 1 },
-    { type: 'list' },
+    { type: 'nav', to: 'home' },
+    { type: 'nav', to: 'check' },
     { type: 'clear' },
     { type: 'clearYes' },
     { type: 'clearNo' },
@@ -27,6 +28,12 @@ describe('callback data', () => {
     'rejects %j',
     (data) => expect(decode(data)).toBeNull(),
   );
+
+  it('maps the pre-panel "list" button to panel navigation and rejects unknown targets', () => {
+    expect(decode('list')).toEqual({ type: 'nav', to: 'list' });
+    expect(decode('go:nowhere')).toBeNull();
+    expect(decode('go:home:1')).toBeNull();
+  });
 
   it('still understands v1 payload shapes as invalid rather than crashing', () => {
     expect(decode('filter:any')).toBeNull();

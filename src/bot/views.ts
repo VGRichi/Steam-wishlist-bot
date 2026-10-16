@@ -5,26 +5,62 @@ import type { TrackedGame } from '../db/types.js';
 import { storeUrl, type Price, type SearchResult } from '../steam/api.js';
 import { escapeHtml, flagEmoji, inlineKeyboard, truncate } from '../telegram/format.js';
 import type { BotCommand, InlineKeyboard, RemoveKeyboard } from '../telegram/types.js';
-import { encode } from './callbacks.js';
+import { encode, type NavTarget } from './callbacks.js';
 
 export interface View {
   text: string;
   markup?: InlineKeyboard;
 }
 
-// The bot's menu is Telegram's command list (the "Menu" button next to the message box).
-// Order matters: the bottom line can end up behind the message box on phones, so /help sits mid-list.
+// Two ways in: the home panel (a message whose buttons edit it in place) and Telegram's command
+// list (the "Menu" button next to the message box), which always leads back to the panel.
 // Emoji are ones that render in color on iOS (➕ ➖ and 🗑 without VS16 show up grey).
 export function commandMenu(region: string | null): BotCommand[] {
   return [
+    { command: 'menu', description: '🏠 Home panel' },
     { command: 'list', description: '📋 Your tracked games' },
     { command: 'add', description: '🔍 Track a new game' },
     { command: 'check', description: '🔄 Check prices now' },
     { command: 'help', description: '❓ How the bot works' },
-    { command: 'remove', description: '❌ Stop tracking a game' },
     { command: 'region', description: region ? `🌍 Change region (now ${flagEmoji(region)} ${region})` : '🌍 Change your region' },
   ];
 }
+
+const nav = (text: string, to: NavTarget) => ({ text, callback_data: encode({ type: 'nav', to }) });
+const HOME_ROW = [nav('🏠 Home', 'home')];
+
+// Must match the cron schedule in vercel.json ("0 0 * * *" = 00:00 UTC).
+const DAILY_CHECK_HOUR_UTC = 0;
+
+function untilNextCheck(now: Date): string {
+  const next = new Date(now);
+  next.setUTCHours(DAILY_CHECK_HOUR_UTC, 0, 0, 0);
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  const hours = Math.floor((next.getTime() - now.getTime()) / 3_600_000);
+  return hours < 1 ? 'under 1h' : `${hours}h`;
+}
+
+// Counts come from saved state (lastConditionMet is updated by the daily check and Check Now),
+// so opening the panel never waits on Steam.
+export function homePanel(region: string, games: TrackedGame[], now: Date): View {
+  const onSale = games.filter((g) => g.lastConditionMet).length;
+  const lines = ['🏠 <b>Steam Wishlist Bot</b>', '', `🎮 Tracking <b>${games.length}</b> of ${LIMITS.maxGamesPerUser} games`];
+  if (games.length) {
+    lines.push(onSale ? `🔥 <b>${onSale}</b> matched your alerts at the last check` : '😴 Nothing matched your alerts at the last check');
+  }
+  lines.push(`🌍 Region: ${flagEmoji(region)} ${region} · next check in ${untilNextCheck(now)}`);
+  return {
+    text: lines.join('\n'),
+    markup: inlineKeyboard([
+      [nav('📋 My List', 'list'), nav('🔍 Add Game', 'search')],
+      [nav('🔄 Check Now', 'check'), nav('❌ Remove', 'remove')],
+      [nav(`🌍 Region ${flagEmoji(region)}`, 'region'), nav('❓ Help', 'help')],
+    ]),
+  };
+}
+
+// Any text with a Home button under it. On prompts that wait for typed input, Home doubles as "cancel".
+export const withHome = (message: string): View => ({ text: message, markup: inlineKeyboard([HOME_ROW]) });
 
 // Clears the button keyboard older versions of the bot left on people's screens.
 export const REMOVE_KEYBOARD: RemoveKeyboard = { remove_keyboard: true };
@@ -60,22 +96,20 @@ export const text = {
       "First, what's your Steam store country? Send a 2-letter code, e.g. <code>US</code>, <code>TR</code>, <code>AZ</code>, <code>DE</code>.",
     ].join('\n'),
 
-  welcomeBack: (region: string) =>
-    `👋 Welcome back! Your region is ${flagEmoji(region)} <b>${region}</b>. Tap <b>Menu</b> next to the message box to get started.`,
+  welcomeBack: () => '👋 Welcome back!',
 
   help: () =>
     [
       '❓ <b>How it works</b>',
       `Track up to ${LIMITS.maxGamesPerUser} games. Once a day I check Steam and message you when a game starts matching its alert - once per sale, not every day.`,
       '',
+      '🏠 /menu — the home panel; everything is a tap from there',
       '📋 /list — your games; tap one to change its alert',
       '🔍 /add — search Steam and track a game (or /add <i>name</i>)',
       '🔄 /check — check all your games right now',
       '❌ /remove — stop tracking a game (🧹 /clear removes all)',
       '🌍 /region — change your store country/currency',
       '✖️ /cancel — stop what you were typing',
-      '',
-      'All of these are under the <b>Menu</b> button next to the message box.',
     ].join('\n'),
 
   askRegion: () => "What's your Steam store country? Send a 2-letter code, e.g. <code>US</code>, <code>TR</code>, <code>DE</code>.",
@@ -116,10 +150,10 @@ export const text = {
 
   alertSaved: () => '✅ Alert saved.',
   removed: (name: string) => `❌ Stopped tracking <b>${escapeHtml(name)}</b>.`,
-  menuMoved: () => '⌨️ The buttons have moved: tap <b>Menu</b> next to the message box for all options.',
+  menuMoved: () => '⌨️ The buttons have moved to the home panel: send /menu anytime.',
   cancelled: () => 'OK, cancelled.',
   nothingToCancel: () => 'Nothing to cancel.',
-  unknown: () => 'Not sure what you mean. Tap <b>Menu</b> next to the message box, or send /help.',
+  unknown: () => 'Not sure what you mean. Send /menu for the home panel.',
   cooldown: (seconds: number) => `You just checked. Try again in ${seconds}s.`,
   checking: (count: number) => `Checking ${count} game(s)…`,
   checkFailed: () => "Couldn't reach Steam right now. Try again in a minute.",
@@ -151,7 +185,7 @@ function alertEmoji(alert: Alert): string {
 const alertLabel = (alert: Alert) => `${alertEmoji(alert)} <i>${escapeHtml(describeAlert(alert))}</i>`;
 
 export function gameList(games: TrackedGame[]): View {
-  if (!games.length) return { text: text.emptyList() };
+  if (!games.length) return withHome(text.emptyList());
   const lines = games.map((g) => `🎮 ${gameLink(g.appId, g.name)} — ${alertLabel(g.alert)}`);
   return {
     text: [
@@ -161,19 +195,20 @@ export function gameList(games: TrackedGame[]): View {
       '',
       'Tap a game below to see its price or change its alert.',
     ].join('\n'),
-    markup: inlineKeyboard(
-      games.map((g) => [{ text: truncate(g.name), callback_data: encode({ type: 'game', appId: g.appId }) }]),
-    ),
+    markup: inlineKeyboard([
+      ...games.map((g) => [{ text: truncate(g.name), callback_data: encode({ type: 'game', appId: g.appId }) }]),
+      HOME_ROW,
+    ]),
   };
 }
 
 export function removePicker(games: TrackedGame[]): View {
-  if (!games.length) return { text: text.emptyList() };
+  if (!games.length) return withHome(text.emptyList());
   return {
-    text: 'Tap a game to stop tracking it:',
+    text: '❌ Tap a game to stop tracking it:',
     markup: inlineKeyboard([
       ...games.map((g) => [{ text: `❌ ${truncate(g.name)}`, callback_data: encode({ type: 'remove', appId: g.appId }) }]),
-      [{ text: '🧹 Remove all', callback_data: encode({ type: 'clear' }) }],
+      [{ text: '🧹 Remove all', callback_data: encode({ type: 'clear' }) }, ...HOME_ROW],
     ]),
   };
 }
@@ -205,7 +240,7 @@ export function gameCard(game: TrackedGame, price: Price | null | undefined, not
       ],
       [
         { text: '🛒 Store page', url: storeUrl(game.appId) },
-        { text: '« My list', callback_data: encode({ type: 'list' }) },
+        nav('« My list', 'list'),
       ],
     ]),
   };

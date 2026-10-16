@@ -9,12 +9,16 @@ export type Callback =
   | { type: 'alert'; appId: number }
   | { type: 'set'; mode: AlertMode; appId: number }
   | { type: 'remove'; appId: number }
-  | { type: 'list' }
+  // Home panel navigation; each target edits the panel message in place.
+  | { type: 'nav'; to: NavTarget }
   | { type: 'clear' }
   | { type: 'clearYes' }
   | { type: 'clearNo' };
 
+export type NavTarget = 'home' | 'list' | 'search' | 'check' | 'remove' | 'region' | 'help';
+
 const ALERT_MODES: readonly AlertMode[] = ['any', 'pct', 'price', 'both'];
+const NAV_TARGETS: readonly NavTarget[] = ['home', 'list', 'search', 'check', 'remove', 'region', 'help'];
 
 export function encode(cb: Callback): string {
   switch (cb.type) {
@@ -25,8 +29,8 @@ export function encode(cb: Callback): string {
       return `${cb.type}:${cb.appId}`;
     case 'set':
       return `set:${cb.mode}:${cb.appId}`;
-    case 'list':
-      return 'list';
+    case 'nav':
+      return `go:${cb.to}`;
     case 'clear':
       return 'clear';
     case 'clearYes':
@@ -46,7 +50,12 @@ export function decode(data: string): Callback | null {
   const [head, a, b, ...rest] = data.split(':');
   if (rest.length) return null;
 
-  if (head === 'list' && a === undefined) return { type: 'list' };
+  if (head === 'go' && b === undefined) {
+    const to = NAV_TARGETS.find((t) => t === a);
+    return to ? { type: 'nav', to } : null;
+  }
+  // "« My list" buttons on messages sent before the home panel existed.
+  if (head === 'list' && a === undefined) return { type: 'nav', to: 'list' };
   if (head === 'clear') {
     if (a === undefined) return { type: 'clear' };
     if (a === 'yes' && b === undefined) return { type: 'clearYes' };

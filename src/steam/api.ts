@@ -62,7 +62,7 @@ interface RawSearchResponse {
   items?: { id: number; name: string; type: string }[];
 }
 
-export class SteamApiError extends Error {}
+class SteamApiError extends Error {}
 
 async function getJson<T>(url: string): Promise<T> {
   // Steam answers 429 or 5xx under load; two quick retries ride out most blips.

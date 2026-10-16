@@ -5,7 +5,7 @@ import type { Pending, Repo, TrackedGame, User } from '../db/types.js';
 import { log } from '../log.js';
 import { isKnownRegion, type Price, type SteamClient } from '../steam/api.js';
 import type { TelegramClient, TgCallbackQuery, TgMessage, TgUpdate } from '../telegram/types.js';
-import { decode } from './callbacks.js';
+import { decode, type NavTarget } from './callbacks.js';
 import * as views from './views.js';
 import { REMOVE_KEYBOARD, text, type View } from './views.js';
 
@@ -35,6 +35,7 @@ const COMMAND_ALIASES: Record<string, string> = {
   clear: 'clear',
   clearlist: 'clear',
   cancel: 'cancel',
+  menu: 'menu',
 };
 
 export function parseCommand(input: string): { command: string; arg: string } | null {
@@ -75,6 +76,12 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
   // Puts this user's region flag into their command menu.
   const refreshMenu = (chatId: number, region: string | null) => tg.setChatCommands(chatId, views.commandMenu(region));
 
+  async function showHome(user: User, reply: Reply) {
+    const region = await requireRegion(user);
+    if (!region) return;
+    await reply(views.homePanel(region, await repo.listGames(user.chatId), now()));
+  }
+
   async function start(user: User) {
     await refreshMenu(user.chatId, user.region);
     if (!user.region) {
@@ -82,12 +89,14 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
       await tg.sendMessage(user.chatId, text.welcome(), REMOVE_KEYBOARD);
       return;
     }
-    await tg.sendMessage(user.chatId, text.welcomeBack(user.region), REMOVE_KEYBOARD);
+    // A message can't both remove the old keyboard and carry the panel's buttons, so two messages.
+    await tg.sendMessage(user.chatId, text.welcomeBack(), REMOVE_KEYBOARD);
+    await showHome(user, send(user.chatId));
   }
 
-  async function askRegion(user: User) {
+  async function askRegion(user: User, reply: Reply) {
     await repo.setPending(user.chatId, { kind: 'region' });
-    await tg.sendMessage(user.chatId, text.askRegion());
+    await reply(views.withHome(text.askRegion()));
   }
 
   async function onRegionInput(user: User, input: string) {
@@ -99,14 +108,15 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
     const { clearedPriceAlerts } = await repo.setRegion(user.chatId, region);
     await refreshMenu(user.chatId, region);
     await tg.sendMessage(user.chatId, text.regionSet(region, isKnownRegion(region), clearedPriceAlerts), REMOVE_KEYBOARD);
+    await showHome({ ...user, region, pending: null }, send(user.chatId));
   }
 
-  async function startAdd(user: User, query: string) {
+  async function startAdd(user: User, query: string, reply: Reply = send(user.chatId)) {
     const region = await requireRegion(user);
     if (!region) return;
     if (!query) {
       await repo.setPending(user.chatId, { kind: 'search' });
-      await tg.sendMessage(user.chatId, text.askSearch());
+      await reply(views.withHome(text.askSearch()));
       return;
     }
     await search(user.chatId, region, query);
@@ -263,32 +273,36 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
     await saveAlert(user.chatId, region, game, alert, send(user.chatId));
   }
 
-  async function checkNow(user: User) {
+  // reply = the home panel to edit; without one, a "Checking…" message is sent and then edited.
+  async function checkNow(user: User, reply?: Reply) {
     const region = await requireRegion(user);
     if (!region) return;
+    const out = reply ?? send(user.chatId);
 
     const current = now();
     if (user.lastCheckAt) {
       const waitMs = LIMITS.checkNowCooldownMs - (current.getTime() - user.lastCheckAt.getTime());
       if (waitMs > 0) {
-        await tg.sendMessage(user.chatId, text.cooldown(Math.ceil(waitMs / 1000)));
+        await out(views.withHome(text.cooldown(Math.ceil(waitMs / 1000))));
         return;
       }
     }
 
     const games = await repo.listGames(user.chatId);
     if (!games.length) {
-      await tg.sendMessage(user.chatId, text.emptyList());
+      await out(views.withHome(text.emptyList()));
       return;
     }
     // Stamp before calling Steam so rapid repeat taps can't fan out requests.
     await repo.setLastCheckAt(user.chatId, current);
 
-    const status = await tg.sendMessage(user.chatId, text.checking(games.length));
-    const show = async (body: string) => {
-      if (status.ok) await tg.editMessage(user.chatId, status.messageId, body);
-      else await tg.sendMessage(user.chatId, body);
-    };
+    let show: Reply = out;
+    if (reply) {
+      await reply({ text: text.checking(games.length) });
+    } else {
+      const status = await tg.sendMessage(user.chatId, text.checking(games.length));
+      if (status.ok) show = (view) => tg.editMessage(user.chatId, status.messageId, view.text, view.markup);
+    }
 
     let prices;
     try {
@@ -298,12 +312,12 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
       );
     } catch (err) {
       log.warn('check now failed', { chatId: user.chatId, err });
-      await show(text.checkFailed());
+      await show(views.withHome(text.checkFailed()));
       return;
     }
 
     const checked = games.map((game) => ({ game, price: prices.get(game.appId) ?? null }));
-    await show(views.checkResults(checked));
+    await show(views.withHome(views.checkResults(checked)));
 
     // The user has now seen every current deal, so the daily check shouldn't announce them again.
     for (const { game, price } of checked) {
@@ -324,23 +338,43 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
 
   // ---------- Dispatch ----------
 
+  // Every home-panel screen. Slash commands reply with a new message, panel buttons edit the panel.
+  async function navigate(user: User, to: NavTarget, reply: Reply) {
+    switch (to) {
+      case 'home':
+        return showHome(user, reply);
+      case 'list':
+        return showList(user.chatId, reply);
+      case 'search':
+        return startAdd(user, '', reply);
+      case 'check':
+        return checkNow(user, reply);
+      case 'remove':
+        return reply(views.removePicker(await repo.listGames(user.chatId)));
+      case 'region':
+        return askRegion(user, reply);
+      case 'help':
+        return reply(views.withHome(text.help()));
+    }
+  }
+
   async function runCommand(user: User, command: string, arg: string) {
     const chatId = user.chatId;
     switch (command) {
       case 'start':
         return start(user);
-      case 'help':
-        return tg.sendMessage(chatId, text.help());
-      case 'list':
-        return showList(chatId, send(chatId));
+      case 'menu':
+        return navigate(user, 'home', send(chatId));
       case 'add':
-        return startAdd(user, arg);
+        return arg ? startAdd(user, arg) : navigate(user, 'search', send(chatId));
       case 'check':
+        // Without a panel to edit, Check Now posts its own "Checking…" message.
         return checkNow(user);
+      case 'help':
+      case 'list':
       case 'region':
-        return askRegion(user);
       case 'remove':
-        return send(chatId)(views.removePicker(await repo.listGames(chatId)));
+        return navigate(user, command, send(chatId));
       case 'clear':
         return confirmClear(chatId, send(chatId));
       case 'cancel':
@@ -423,14 +457,17 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
         if (game) await repo.removeGame(chatId, callback.appId);
         return showList(chatId, edit, game ? text.removed(game.name) : undefined);
       }
-      case 'list':
+      case 'nav':
+        // Leaving a prompt (e.g. "type the game name") by tapping Home or another screen cancels it.
+        if (user.pending) await repo.setPending(chatId, null);
+        return navigate({ ...user, pending: null }, callback.to, edit);
       case 'clearNo':
         return showList(chatId, edit);
       case 'clear':
         return confirmClear(chatId, edit);
       case 'clearYes':
         await repo.clearGames(chatId);
-        return edit({ text: text.cleared() });
+        return edit(views.withHome(text.cleared()));
     }
   }
 
