@@ -2,8 +2,6 @@
 
 export interface TgUser {
   id: number;
-  first_name?: string;
-  language_code?: string;
 }
 
 export interface TgChat {

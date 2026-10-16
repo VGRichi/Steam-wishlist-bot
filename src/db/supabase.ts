@@ -64,12 +64,6 @@ export function createSupabaseRepo(
   const games = () => client.from('tracked_games');
 
   return {
-    async getUser(chatId) {
-      const { data, error } = await users().select(USER_COLUMNS).eq('chat_id', chatId).maybeSingle<UserRow>();
-      check(error);
-      return data ? toUser(data) : null;
-    },
-
     async touchUser(chatId) {
       const { data, error } = await users()
         .upsert({ chat_id: chatId, blocked_at: null }, { onConflict: 'chat_id' })

@@ -27,6 +27,4 @@ export const LIMITS = {
   maxGamesPerUser: 10,
   searchResults: 5,
   checkNowCooldownMs: 60_000,
-  // "Buy now" link threshold in Check Now when the user has no alert of their own.
-  hotDealPercent: 50,
 } as const;

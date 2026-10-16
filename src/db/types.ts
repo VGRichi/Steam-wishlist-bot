@@ -33,7 +33,6 @@ export interface Subscription extends TrackedGame {
 export type AddGameResult = 'added' | 'duplicate' | 'limit';
 
 export interface Repo {
-  getUser(chatId: number): Promise<User | null>;
   // Creates the user on first contact and clears the blocked flag, since they're talking to us again.
   touchUser(chatId: number): Promise<User>;
   // On an actual change, drops price alerts (they were in the old currency) and resets every

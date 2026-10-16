@@ -38,6 +38,7 @@ export class MemoryRepo implements Repo {
     return (this.games.get(chatId) ?? []).find((g) => g.appId === appId);
   }
 
+  // Test-only inspection helper (not part of Repo).
   async getUser(chatId: number) {
     const u = this.users.get(chatId);
     return u ? { ...u } : null;
