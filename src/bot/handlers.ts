@@ -7,7 +7,7 @@ import { isKnownRegion, type Price, type SteamClient } from '../steam/api.js';
 import type { TelegramClient, TgCallbackQuery, TgMessage, TgUpdate } from '../telegram/types.js';
 import { decode } from './callbacks.js';
 import * as views from './views.js';
-import { LEGACY_MENU, MENU, text, type View } from './views.js';
+import { REMOVE_KEYBOARD, text, type View } from './views.js';
 
 export interface BotDeps {
   repo: Repo;
@@ -72,13 +72,17 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
 
   // ---------- Flows ----------
 
+  // Puts this user's region flag into their command menu.
+  const refreshMenu = (chatId: number, region: string | null) => tg.setChatCommands(chatId, views.commandMenu(region));
+
   async function start(user: User) {
+    await refreshMenu(user.chatId, user.region);
     if (!user.region) {
       await repo.setPending(user.chatId, { kind: 'region' });
-      await tg.sendMessage(user.chatId, text.welcome());
+      await tg.sendMessage(user.chatId, text.welcome(), REMOVE_KEYBOARD);
       return;
     }
-    await tg.sendMessage(user.chatId, text.welcomeBack(user.region), views.mainMenu(user.region));
+    await tg.sendMessage(user.chatId, text.welcomeBack(user.region), REMOVE_KEYBOARD);
   }
 
   async function askRegion(user: User) {
@@ -93,11 +97,8 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
       return;
     }
     const { clearedPriceAlerts } = await repo.setRegion(user.chatId, region);
-    await tg.sendMessage(
-      user.chatId,
-      text.regionSet(region, isKnownRegion(region), clearedPriceAlerts),
-      views.mainMenu(region),
-    );
+    await refreshMenu(user.chatId, region);
+    await tg.sendMessage(user.chatId, text.regionSet(region, isKnownRegion(region), clearedPriceAlerts), REMOVE_KEYBOARD);
   }
 
   async function startAdd(user: User, query: string) {
@@ -318,7 +319,7 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
 
   async function cancel(user: User) {
     if (user.pending) await repo.setPending(user.chatId, null);
-    await tg.sendMessage(user.chatId, user.pending ? text.cancelled() : text.nothingToCancel(), views.mainMenu(user.region));
+    await tg.sendMessage(user.chatId, user.pending ? text.cancelled() : text.nothingToCancel());
   }
 
   // ---------- Dispatch ----------
@@ -329,7 +330,7 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
       case 'start':
         return start(user);
       case 'help':
-        return tg.sendMessage(chatId, text.help(), views.mainMenu(user.region));
+        return tg.sendMessage(chatId, text.help());
       case 'list':
         return showList(chatId, send(chatId));
       case 'add':
@@ -347,24 +348,6 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
     }
   }
 
-  function menuCommand(input: string): string | null {
-    if (input === MENU.list) return 'list';
-    if (input === MENU.add || input === LEGACY_MENU.add) return 'add';
-    if (input === MENU.check) return 'check';
-    if (input === MENU.remove || input === LEGACY_MENU.remove) return 'remove';
-    if (input === MENU.clear || input === LEGACY_MENU.clear) return 'clear';
-    if (input === MENU.help) return 'help';
-    if (input.startsWith(MENU.regionPrefix)) return 'region';
-    return null;
-  }
-
-  // A button label that isn't on the current keyboard means the user still has an older one.
-  function isOutdatedMenuLabel(input: string): boolean {
-    const current: string[] = [MENU.list, MENU.add, MENU.check, MENU.remove, MENU.clear, MENU.help];
-    if (input.startsWith(MENU.regionPrefix)) return !input.startsWith(`${MENU.regionPrefix} Set Region`);
-    return !current.includes(input);
-  }
-
   async function onMessage(message: TgMessage) {
     // Lists and alerts are per person; group chats aren't supported.
     if (message.chat.type !== 'private') return;
@@ -373,7 +356,8 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
     let user = await repo.touchUser(chatId);
 
     const parsed = parseCommand(input);
-    const command = parsed?.command ?? menuCommand(input);
+    const oldButton = parsed ? null : views.oldKeyboardCommand(input);
+    const command = parsed?.command ?? oldButton;
     if (command) {
       // Any explicit action abandons a half-finished conversation, except /cancel which reports on it.
       if (user.pending && command !== 'cancel') {
@@ -381,9 +365,10 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
         user = { ...user, pending: null };
       }
       await runCommand(user, command, parsed?.arg ?? '');
-      // Swap in the current keyboard. Region and help replies already carry it.
-      if (!parsed && command !== 'region' && command !== 'help' && isOutdatedMenuLabel(input)) {
-        await tg.sendMessage(chatId, text.menuUpdated(), views.mainMenu(user.region));
+      // A tap on a button from an older version: do what it said, then retire that keyboard.
+      if (oldButton) {
+        await refreshMenu(chatId, user.region);
+        await tg.sendMessage(chatId, text.menuMoved(), REMOVE_KEYBOARD);
       }
       return;
     }
@@ -403,7 +388,7 @@ export function createBot({ repo, steam, tg, now = () => new Date() }: BotDeps) 
       }
     }
 
-    await tg.sendMessage(chatId, text.unknown(), views.mainMenu(user.region));
+    await tg.sendMessage(chatId, text.unknown());
   }
 
   async function onCallback(query: TgCallbackQuery) {

@@ -1,4 +1,4 @@
-import type { InlineButton, InlineKeyboard, ReplyKeyboard } from './types.js';
+import type { InlineButton, InlineKeyboard } from './types.js';
 
 // Every piece of text not written by us (game names, user input) must go through this
 // before it's put in an HTML-mode message, or Telegram rejects the whole message.
@@ -14,14 +14,6 @@ export function flagEmoji(regionCode: string | null | undefined): string {
 
 export function inlineKeyboard(rows: InlineButton[][]): InlineKeyboard {
   return { inline_keyboard: rows.filter((row) => row.length > 0) };
-}
-
-export function replyKeyboard(rows: string[][]): ReplyKeyboard {
-  return {
-    keyboard: rows.map((row) => row.map((text) => ({ text }))),
-    resize_keyboard: true,
-    is_persistent: true,
-  };
 }
 
 // Telegram's button labels get cut off on phones well before the API limit.

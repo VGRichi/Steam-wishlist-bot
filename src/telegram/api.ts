@@ -96,5 +96,14 @@ export function createTelegramClient(token = config.telegramToken): TelegramClie
         log.warn('answerCallbackQuery failed', { err });
       }
     },
+
+    async setChatCommands(chatId, commands) {
+      try {
+        await callTelegram('setMyCommands', { commands, scope: { type: 'chat', chat_id: chatId } }, token);
+      } catch (err) {
+        // Cosmetic (the region flag in the menu); the bot-wide default menu still works.
+        log.warn('setMyCommands for chat failed', { chatId, err });
+      }
+    },
   };
 }

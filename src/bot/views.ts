@@ -3,8 +3,8 @@ import { LIMITS } from '../config.js';
 import { describeAlert, formatMoney, formatPrice, isTriggered, type Alert } from '../domain/alert.js';
 import type { TrackedGame } from '../db/types.js';
 import { storeUrl, type Price, type SearchResult } from '../steam/api.js';
-import { escapeHtml, flagEmoji, inlineKeyboard, replyKeyboard, truncate } from '../telegram/format.js';
-import type { InlineKeyboard, ReplyKeyboard } from '../telegram/types.js';
+import { escapeHtml, flagEmoji, inlineKeyboard, truncate } from '../telegram/format.js';
+import type { BotCommand, InlineKeyboard, RemoveKeyboard } from '../telegram/types.js';
 import { encode } from './callbacks.js';
 
 export interface View {
@@ -12,32 +12,40 @@ export interface View {
   markup?: InlineKeyboard;
 }
 
-// Only symbols that render as color emoji everywhere: ➕ ➖ and 🗑 (without VS16) show up grey on iOS.
-export const MENU = {
-  list: '📋 My List',
-  add: '🔍 Add Game',
-  check: '🔄 Check Now',
-  remove: '❌ Remove Game',
-  clear: '🧹 Clear List',
-  help: '❓ Help',
-  // The region button also shows the current flag, so it's matched by prefix.
-  regionPrefix: '🌍',
-} as const;
+// The bot's menu is Telegram's command list (the "Menu" button next to the message box).
+// Order matters: the bottom line can end up behind the message box on phones, so /help sits mid-list.
+// Emoji are ones that render in color on iOS (➕ ➖ and 🗑 without VS16 show up grey).
+export function commandMenu(region: string | null): BotCommand[] {
+  return [
+    { command: 'list', description: '📋 Your tracked games' },
+    { command: 'add', description: '🔍 Track a new game' },
+    { command: 'check', description: '🔄 Check prices now' },
+    { command: 'help', description: '❓ How the bot works' },
+    { command: 'remove', description: '❌ Stop tracking a game' },
+    { command: 'region', description: region ? `🌍 Change region (now ${flagEmoji(region)} ${region})` : '🌍 Change your region' },
+  ];
+}
 
-// Labels from older keyboards. Users keep seeing an old keyboard until we send them a new one.
-export const LEGACY_MENU = {
-  add: '➕ Add Game',
-  remove: '➖ Remove Game',
-  clear: '🗑 Clear List',
-} as const;
+// Clears the button keyboard older versions of the bot left on people's screens.
+export const REMOVE_KEYBOARD: RemoveKeyboard = { remove_keyboard: true };
 
-export function mainMenu(region: string | null): ReplyKeyboard {
-  return replyKeyboard([
-    [MENU.list, MENU.add],
-    [MENU.check, MENU.remove],
-    [MENU.clear, `${MENU.regionPrefix} Set Region ${flagEmoji(region)}`],
-    [MENU.help],
-  ]);
+// Labels from those old keyboards, so a tap on one still does what it says.
+const OLD_KEYBOARD: Record<string, string> = {
+  '📋 My List': 'list',
+  '➕ Add Game': 'add',
+  '🔍 Add Game': 'add',
+  '🔄 Check Now': 'check',
+  '➖ Remove Game': 'remove',
+  '❌ Remove Game': 'remove',
+  '🗑 Clear List': 'clear',
+  '🧹 Clear List': 'clear',
+  '❓ Help': 'help',
+};
+
+export function oldKeyboardCommand(input: string): string | null {
+  // The region button carried the current flag ("🌍 Set Region 🇹🇷"), so it's matched by prefix.
+  if (input.startsWith('🌍 ')) return 'region';
+  return OLD_KEYBOARD[input] ?? null;
 }
 
 const gameLink = (appId: number, name: string) => `<a href="${storeUrl(appId)}">${escapeHtml(name)}</a>`;
@@ -53,20 +61,21 @@ export const text = {
     ].join('\n'),
 
   welcomeBack: (region: string) =>
-    `👋 Welcome back! Your region is ${flagEmoji(region)} <b>${region}</b>. Use the menu below.`,
+    `👋 Welcome back! Your region is ${flagEmoji(region)} <b>${region}</b>. Tap <b>Menu</b> next to the message box to get started.`,
 
   help: () =>
     [
-      '<b>How it works</b>',
+      '❓ <b>How it works</b>',
       `Track up to ${LIMITS.maxGamesPerUser} games. Once a day I check Steam and message you when a game starts matching its alert - once per sale, not every day.`,
       '',
-      `${MENU.list} - your games; tap one to change its alert`,
-      `${MENU.add} - search Steam and start tracking a game`,
-      `${MENU.check} - check all your games right now`,
-      `${MENU.remove} / ${MENU.clear} - stop tracking one or all games`,
-      `${MENU.regionPrefix} Set Region - change the store country/currency`,
+      '📋 /list — your games; tap one to change its alert',
+      '🔍 /add — search Steam and track a game (or /add <i>name</i>)',
+      '🔄 /check — check all your games right now',
+      '❌ /remove — stop tracking a game (🧹 /clear removes all)',
+      '🌍 /region — change your store country/currency',
+      '✖️ /cancel — stop what you were typing',
       '',
-      'You can also type: /add <i>name</i>, /list, /check, /remove, /clear, /region, /cancel',
+      'All of these are under the <b>Menu</b> button next to the message box.',
     ].join('\n'),
 
   askRegion: () => "What's your Steam store country? Send a 2-letter code, e.g. <code>US</code>, <code>TR</code>, <code>DE</code>.",
@@ -76,7 +85,7 @@ export const text = {
     if (!known) lines.push(`⚠️ <b>${region}</b> isn't a region I recognize. I'll use it anyway; if prices look wrong, change it.`);
     if (clearedPriceAlerts > 0) {
       lines.push(
-        `ℹ️ Price alerts on ${clearedPriceAlerts} game(s) were in your old currency, so I removed them. Any % alerts are kept - check ${MENU.list}.`,
+        `ℹ️ Price alerts on ${clearedPriceAlerts} game(s) were in your old currency, so I removed them. Any % alerts are kept - see /list.`,
       );
     }
     return lines.join('\n');
@@ -86,7 +95,7 @@ export const text = {
   searchFailed: () => "Steam's search isn't responding right now. Try again in a minute.",
   noResults: (query: string) => `Nothing found for "<b>${escapeHtml(query)}</b>". Try a different spelling or a shorter name.`,
   limitReached: () =>
-    `You're tracking the maximum of ${LIMITS.maxGamesPerUser} games. Tap ${MENU.remove} to make room.`,
+    `You're tracking the maximum of ${LIMITS.maxGamesPerUser} games. Use /remove to make room.`,
   notAvailable: () => "That game isn't available in your region's store.",
   notTracked: () => "You're not tracking that game anymore.",
 
@@ -107,15 +116,15 @@ export const text = {
 
   alertSaved: () => '✅ Alert saved.',
   removed: (name: string) => `❌ Stopped tracking <b>${escapeHtml(name)}</b>.`,
-  menuUpdated: () => '⌨️ Menu updated.',
+  menuMoved: () => '⌨️ The buttons have moved: tap <b>Menu</b> next to the message box for all options.',
   cancelled: () => 'OK, cancelled.',
   nothingToCancel: () => 'Nothing to cancel.',
-  unknown: () => 'Not sure what you mean - use the menu below, or /help.',
+  unknown: () => 'Not sure what you mean. Tap <b>Menu</b> next to the message box, or send /help.',
   cooldown: (seconds: number) => `You just checked. Try again in ${seconds}s.`,
   checking: (count: number) => `Checking ${count} game(s)…`,
   checkFailed: () => "Couldn't reach Steam right now. Try again in a minute.",
   error: () => 'Something went wrong on my side. Please try again.',
-  emptyList: () => `You're not tracking any games yet. Tap ${MENU.add} to start.`,
+  emptyList: () => `You're not tracking any games yet. Send /add to start.`,
   cleared: () => '✅ Your list is now empty.',
 };
 
@@ -162,9 +171,10 @@ export function removePicker(games: TrackedGame[]): View {
   if (!games.length) return { text: text.emptyList() };
   return {
     text: 'Tap a game to stop tracking it:',
-    markup: inlineKeyboard(
-      games.map((g) => [{ text: `❌ ${truncate(g.name)}`, callback_data: encode({ type: 'remove', appId: g.appId }) }]),
-    ),
+    markup: inlineKeyboard([
+      ...games.map((g) => [{ text: `❌ ${truncate(g.name)}`, callback_data: encode({ type: 'remove', appId: g.appId }) }]),
+      [{ text: '🧹 Remove all', callback_data: encode({ type: 'clear' }) }],
+    ]),
   };
 }
 

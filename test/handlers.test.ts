@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createBot } from '../src/bot/handlers.js';
-import { MENU } from '../src/bot/views.js';
 import { LIMITS } from '../src/config.js';
 import { callbackUpdate, FakeSteam, FakeTelegram, MemoryRepo, price, textUpdate } from './fakes.js';
 
@@ -39,31 +38,32 @@ describe('bot', () => {
     });
 
     it('asks for a region before anything that needs prices', async () => {
-      await say(MENU.check);
+      await say('/check');
       expect(tg.last().text).toContain('store country');
       expect((await repo.getUser(CHAT))?.pending).toEqual({ kind: 'region' });
     });
 
-    it('greets returning users with the menu instead of re-asking', async () => {
+    it('greets returning users, clears any old keyboard and sets their command menu', async () => {
       repo.seedUser(CHAT, 'DE');
       await say('/start');
       expect(tg.last().text).toContain('Welcome back');
-      expect(tg.last().markup).toEqual({
-        keyboard: [
-          [{ text: MENU.list }, { text: MENU.add }],
-          [{ text: MENU.check }, { text: MENU.remove }],
-          [{ text: MENU.clear }, { text: '🌍 Set Region 🇩🇪' }],
-          [{ text: MENU.help }],
-        ],
-        resize_keyboard: true,
-        is_persistent: true,
-      });
+      expect(tg.last().markup).toEqual({ remove_keyboard: true });
+      expect(tg.chatCommands.get(CHAT)?.map((c) => c.command)).toEqual(['list', 'add', 'check', 'help', 'remove', 'region']);
+      expect(tg.chatCommands.get(CHAT)?.at(-1)?.description).toBe('🌍 Change region (now 🇩🇪 DE)');
     });
 
-    it('opens help from the keyboard button', async () => {
+    it('updates the region flag in the command menu', async () => {
       repo.seedUser(CHAT, 'DE');
-      await say(MENU.help);
+      await say('/region');
+      await say('TR');
+      expect(tg.chatCommands.get(CHAT)?.at(-1)?.description).toBe('🌍 Change region (now 🇹🇷 TR)');
+    });
+
+    it('/help explains the commands', async () => {
+      repo.seedUser(CHAT, 'DE');
+      await say('/help');
       expect(tg.last().text).toContain('How it works');
+      expect(tg.last().text).toContain('/remove');
     });
 
     it('drops price alerts when the region changes', async () => {
@@ -85,7 +85,7 @@ describe('bot', () => {
     });
 
     it('search -> pick -> percent alert', async () => {
-      await say(MENU.add);
+      await say('/add');
       await say('cyberpunk');
       expect(tg.buttons()).toEqual([{ text: 'Cyberpunk 2077', data: 'add:1091500' }]);
 
@@ -153,14 +153,14 @@ describe('bot', () => {
     it('a menu tap abandons a half-finished alert instead of misreading the next message', async () => {
       await tap('add:1091500');
       await tap('set:pct:1091500');
-      await say(MENU.list);
+      await say('/list');
       expect((await repo.getUser(CHAT))?.pending).toBeNull();
       await say('30');
       expect(tg.last().text).toContain('Not sure what you mean');
     });
 
     it('/cancel clears pending input', async () => {
-      await say(MENU.add);
+      await say('/add');
       await say('/cancel');
       expect(tg.last().text).toContain('cancelled');
       expect((await repo.getUser(CHAT))?.pending).toBeNull();
@@ -181,16 +181,17 @@ describe('bot', () => {
     });
 
     it('lists games with buttons to manage each', async () => {
-      await say(MENU.list);
+      await say('/list');
       expect(tg.last().text).toContain('Your games (2/');
       expect(tg.buttons().map((b) => b.data)).toEqual(['game:10', 'game:11']);
     });
 
-    it('Remove Game offers each game as a remove button', async () => {
-      await say(MENU.remove);
+    it('/remove offers each game as a remove button, plus remove all', async () => {
+      await say('/remove');
       expect(tg.buttons()).toEqual([
         { text: '❌ Hades', data: 'remove:10' },
         { text: '❌ Celeste', data: 'remove:11' },
+        { text: '🧹 Remove all', data: 'clear' },
       ]);
     });
 
@@ -210,19 +211,22 @@ describe('bot', () => {
       expect(await repo.listGames(CHAT)).toHaveLength(0);
     });
 
-    it('keeps old keyboard buttons working and swaps in the current keyboard', async () => {
-      await say('➖ Remove Game');
-      expect(tg.sent.at(-2)?.text).toContain('stop tracking');
-      expect(tg.last().text).toContain('Menu updated');
-      expect(tg.last().markup).toHaveProperty('keyboard');
-
-      await say('🗑 Clear List');
-      expect(tg.sent.at(-2)?.text).toContain('Remove all 2 game(s)');
-      expect(tg.last().text).toContain('Menu updated');
+    it.each([
+      ['➖ Remove Game', 'stop tracking'],
+      ['❌ Remove Game', 'stop tracking'],
+      ['🗑 Clear List', 'Remove all 2 game(s)'],
+      ['📋 My List', 'Your games'],
+      ['🌍 Set Region 🇹🇷', 'store country'],
+    ])('an old keyboard button %j still works, then the keyboard is removed', async (label, expected) => {
+      await say(label);
+      expect(tg.sent.at(-2)?.text).toContain(expected);
+      expect(tg.last().text).toContain('buttons have moved');
+      expect(tg.last().markup).toEqual({ remove_keyboard: true });
+      expect(tg.chatCommands.has(CHAT)).toBe(true);
     });
 
-    it('does not resend the keyboard for current buttons', async () => {
-      await say(MENU.clear);
+    it('commands do not trigger the keyboard notice', async () => {
+      await say('/clear');
       expect(tg.last().text).toContain('Remove all 2 game(s)');
     });
   });
@@ -238,7 +242,7 @@ describe('bot', () => {
     });
 
     it('fetches all prices in one request and puts alert matches first', async () => {
-      await say(MENU.check);
+      await say('/check');
       expect(steam.calls.getPrices).toBe(1);
       const result = tg.last().text;
       expect(result).toContain('1</b> game(s) match');
@@ -249,16 +253,16 @@ describe('bot', () => {
     });
 
     it('has a cooldown', async () => {
-      await say(MENU.check);
+      await say('/check');
       clock = new Date(clock.getTime() + 10_000);
-      await say(MENU.check);
+      await say('/check');
       expect(tg.last().text).toContain('Try again in 50s');
       expect(steam.calls.getPrices).toBe(1);
     });
 
     it('tells the user when Steam is down', async () => {
       steam.failRegions.add('US');
-      await say(MENU.check);
+      await say('/check');
       expect(tg.last().text).toContain("Couldn't reach Steam");
     });
   });
@@ -281,7 +285,7 @@ describe('bot', () => {
       throw new Error('db down');
     };
     repo.seedUser(CHAT, 'US');
-    await say(MENU.list);
+    await say('/list');
     expect(tg.last().text).toContain('Something went wrong');
   });
 });

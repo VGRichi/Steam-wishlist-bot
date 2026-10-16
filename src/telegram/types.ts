@@ -40,13 +40,17 @@ export interface InlineKeyboard {
   inline_keyboard: InlineButton[][];
 }
 
-export interface ReplyKeyboard {
-  keyboard: { text: string }[][];
-  resize_keyboard: true;
-  is_persistent: true;
+export interface RemoveKeyboard {
+  remove_keyboard: true;
 }
 
-export type ReplyMarkup = InlineKeyboard | ReplyKeyboard;
+export type ReplyMarkup = InlineKeyboard | RemoveKeyboard;
+
+// One line in the "Menu" command list.
+export interface BotCommand {
+  command: string;
+  description: string;
+}
 
 export type SendResult =
   | { ok: true; messageId: number }
@@ -57,4 +61,6 @@ export interface TelegramClient {
   sendMessage(chatId: number, text: string, markup?: ReplyMarkup): Promise<SendResult>;
   editMessage(chatId: number, messageId: number, text: string, markup?: InlineKeyboard): Promise<void>;
   answerCallback(callbackQueryId: string, text?: string): Promise<void>;
+  // Sets the command menu this one chat sees (overrides the bot-wide default).
+  setChatCommands(chatId: number, commands: BotCommand[]): Promise<void>;
 }

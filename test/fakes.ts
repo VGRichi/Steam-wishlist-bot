@@ -1,6 +1,6 @@
 import type { Pending, Repo, Subscription, TrackedGame, User } from '../src/db/types.js';
 import type { AppDetails, Price, PriceLookup, SearchResult, SteamClient } from '../src/steam/api.js';
-import type { InlineKeyboard, ReplyMarkup, SendResult, TelegramClient, TgUpdate } from '../src/telegram/types.js';
+import type { BotCommand, InlineKeyboard, ReplyMarkup, SendResult, TelegramClient, TgUpdate } from '../src/telegram/types.js';
 
 interface StoredUser extends User {
   blocked: boolean;
@@ -162,6 +162,7 @@ export interface SentMessage {
 export class FakeTelegram implements TelegramClient {
   sent: SentMessage[] = [];
   answered: string[] = [];
+  chatCommands = new Map<number, BotCommand[]>();
   blockedChats = new Set<number>();
   failingChats = new Set<number>();
   private nextId = 1000;
@@ -177,6 +178,9 @@ export class FakeTelegram implements TelegramClient {
   }
   async answerCallback(id: string) {
     this.answered.push(id);
+  }
+  async setChatCommands(chatId: number, commands: BotCommand[]) {
+    this.chatCommands.set(chatId, commands);
   }
 
   last(): SentMessage {
