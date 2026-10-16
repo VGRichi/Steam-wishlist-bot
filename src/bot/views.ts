@@ -1,6 +1,6 @@
 // Every message the bot sends, as pure functions of data. No I/O here, so it's all unit-testable.
 import { LIMITS } from '../config.js';
-import { describeAlert, formatMoney, formatPrice, isTriggered } from '../domain/alert.js';
+import { describeAlert, formatMoney, formatPrice, isTriggered, type Alert } from '../domain/alert.js';
 import type { TrackedGame } from '../db/types.js';
 import { storeUrl, type Price, type SearchResult } from '../steam/api.js';
 import { escapeHtml, flagEmoji, inlineKeyboard, replyKeyboard, truncate } from '../telegram/format.js';
@@ -131,11 +131,27 @@ export function searchResults(query: string, results: SearchResult[]): View {
   };
 }
 
+function alertEmoji(alert: Alert): string {
+  const { minDiscountPercent: pct, maxPrice } = alert;
+  if (pct != null && maxPrice != null) return '🎯';
+  if (pct != null) return '📊';
+  if (maxPrice != null) return '💰';
+  return '🔔';
+}
+
+const alertLabel = (alert: Alert) => `${alertEmoji(alert)} <i>${escapeHtml(describeAlert(alert))}</i>`;
+
 export function gameList(games: TrackedGame[]): View {
   if (!games.length) return { text: text.emptyList() };
-  const lines = games.map((g, i) => `${i + 1}. ${gameLink(g.appId, g.name)} - <i>${escapeHtml(describeAlert(g.alert))}</i>`);
+  const lines = games.map((g) => `🎮 ${gameLink(g.appId, g.name)} — ${alertLabel(g.alert)}`);
   return {
-    text: [`<b>Your games (${games.length}/${LIMITS.maxGamesPerUser})</b>`, '', ...lines, '', 'Tap a game to see its price or change its alert.'].join('\n'),
+    text: [
+      `<b>📋 Your games (${games.length}/${LIMITS.maxGamesPerUser})</b>`,
+      '',
+      ...lines,
+      '',
+      'Tap a game below to see its price or change its alert.',
+    ].join('\n'),
     markup: inlineKeyboard(
       games.map((g) => [{ text: truncate(g.name), callback_data: encode({ type: 'game', appId: g.appId }) }]),
     ),
@@ -153,17 +169,21 @@ export function removePicker(games: TrackedGame[]): View {
 }
 
 function priceLine(price: Price | null): string {
-  if (!price) return 'No price in your store (free or not sold there).';
+  if (!price) return '🚫 No price in your store (free or not sold there)';
   if (price.discountPercent > 0) {
-    return `🔥 ${price.discountPercent}% off - <b>${escapeHtml(formatPrice(price))}</b> (was ${formatMoney(price.initialCents, price.currency)})`;
+    return `🔥 ${price.discountPercent}% off — <b>${escapeHtml(formatPrice(price))}</b> (was ${formatMoney(price.initialCents, price.currency)})`;
   }
-  return `Price: ${escapeHtml(formatPrice(price))} (no sale)`;
+  return `💤 No sale — ${escapeHtml(formatPrice(price))}`;
 }
 
 // price: undefined = we didn't manage to look it up.
 export function gameCard(game: TrackedGame, price: Price | null | undefined, note?: string): View {
-  const lines = [`🎮 ${gameLink(game.appId, game.name)}`, '', price === undefined ? "Couldn't fetch the current price." : priceLine(price)];
-  lines.push(`🔔 Alert: <b>${escapeHtml(describeAlert(game.alert))}</b>`);
+  const lines = [
+    `🎮 <b>${gameLink(game.appId, game.name)}</b>`,
+    '',
+    price === undefined ? "❓ Couldn't fetch the current price" : priceLine(price),
+  ];
+  lines.push(`${alertEmoji(game.alert)} Alert: <b>${escapeHtml(describeAlert(game.alert))}</b>`);
   if (price && isTriggered(game.alert, price)) lines.push('✅ Matches your alert right now!');
   if (note) lines.push('', note);
   return {
@@ -229,17 +249,25 @@ export function checkResults(checked: CheckedGame[]): string {
   const sorted = [...checked].sort((a, b) => rank(b) - rank(a));
 
   const lines = sorted.map(({ game, price }, i) => {
-    const prefix = `${i + 1}. ${gameLink(game.appId, game.name)}`;
-    if (price === undefined) return `${prefix} - ❓ couldn't fetch`;
-    if (price === null) return `${prefix} - no price in your store`;
+    const name = gameLink(game.appId, game.name);
+    const n = `${i + 1}.`;
+    if (price === undefined) return `${n} ❓ ${name} — couldn't fetch right now`;
+    if (price === null) return `${n} 🚫 ${name} — no price in your store`;
     const priceText = escapeHtml(formatPrice(price));
-    if (isTriggered(game.alert, price)) return `${prefix} - ✅ <b>${price.discountPercent}% off, ${priceText}</b>`;
-    if (price.discountPercent > 0) return `${prefix} - ${price.discountPercent}% off, ${priceText} <i>(below your alert)</i>`;
-    return `${prefix} - ${priceText}`;
+    if (isTriggered(game.alert, price)) {
+      const deal = price.discountPercent > 0 ? `${price.discountPercent}% off, now ${priceText}` : `now ${priceText}`;
+      return `${n} 🔥 ${name} — <b>${deal}</b> ✅`;
+    }
+    if (price.discountPercent > 0) {
+      return `${n} 🏷️ ${name} — ${price.discountPercent}% off, now ${priceText} <i>(below your alert)</i>`;
+    }
+    return `${n} 💤 ${name} — no sale (${priceText})`;
   });
   const matches = sorted.filter(({ game, price }) => price && isTriggered(game.alert, price)).length;
-  const summary = matches ? `✅ <b>${matches}</b> game(s) match your alerts right now.` : 'Nothing matches your alerts right now.';
-  return [summary, '', ...lines].join('\n');
+  const summary = matches
+    ? `✅ <b>${matches}</b> game(s) match your alerts right now!`
+    : '😴 Nothing matches your alerts right now.';
+  return ['<b>🔄 Price check</b>', summary, '', ...lines].join('\n');
 }
 
 export interface SaleNotice {
@@ -252,9 +280,9 @@ export function saleNotification(sales: SaleNotice[]): string {
   const blocks = sales.map(({ game, price }) => {
     const deal =
       price.discountPercent > 0
-        ? `${price.discountPercent}% off - <b>${escapeHtml(formatPrice(price))}</b> (was ${formatMoney(price.initialCents, price.currency)})`
-        : `Now <b>${escapeHtml(formatPrice(price))}</b>`;
-    return `🎮 ${gameLink(game.appId, game.name)}\n${deal}\n<i>Your alert: ${escapeHtml(describeAlert(game.alert))}</i>`;
+        ? `💸 ${price.discountPercent}% off — <b>${escapeHtml(formatPrice(price))}</b> (was ${formatMoney(price.initialCents, price.currency)})`
+        : `💸 Now <b>${escapeHtml(formatPrice(price))}</b>`;
+    return `🎮 <b>${gameLink(game.appId, game.name)}</b>\n${deal}\n${alertEmoji(game.alert)} Your alert: <i>${escapeHtml(describeAlert(game.alert))}</i>`;
   });
   return [header, ...blocks].join('\n\n');
 }
