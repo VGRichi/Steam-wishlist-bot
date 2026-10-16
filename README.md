@@ -1,108 +1,48 @@
 # Steam Wishlist Bot
 
-A free Telegram bot that watches the Steam games you want and pings you the
-moment one goes on sale - with custom alert rules per game, so you only hear
-about the deals you actually care about.
+A free Telegram bot that pings you when Steam games you want go on sale, with
+an alert rule per game so you only hear about deals you care about.
 
 ## Get started
 
-Open the bot on Telegram and send `/start`. You'll be asked for your Steam
-store country (e.g. `US`, `TR`, `AZ`, `DE`) so prices are checked in your
-local currency, then you're ready to go.
+Open [@SteamWishful_bot](https://t.me/SteamWishful_bot), send `/start`, and
+enter your Steam store country (e.g. `US`, `TR`, `AZ`) so prices are in your
+currency. Everything else is done with the menu buttons.
 
-Everything after that is done through the button menu - no commands to
-memorize (though they exist if you like typing: `/add <name>`, `/list`,
-`/check`, `/region`, `/cancel`, `/help`).
+## Features
 
-## What it does
+- **📋 My List** - your games and alerts. Tap a game to see its price, change
+  its alert, or remove it.
+- **➕ Add Game** - search by name, tap the match, then choose an alert:
+  - 🔔 any discount
+  - 📊 at least X% off
+  - 💰 at most a price you set
+  - 🎯 either of the two
+- **🔄 Check Now** - live prices for all your games, alert matches first.
+- **🌍 Region** - change your store country any time.
 
-- **📋 My List** - your tracked games and their alerts. Tap a game to see its
-  current price, change its alert, open the store page, or remove it. Clearing
-  the whole list is here too (asks you to confirm first).
-- **➕ Add Game** - search by name, tap the right match, and it's tracked
-  straight away with an "any discount" alert. Pick a different rule right
-  there, or later from My List:
-  - 🔔 **Any discount** - notify the moment it's on sale at all
-  - 📊 **Min. % off** - only notify at, say, 30% off or more
-  - 💰 **Max. price** - only notify once it costs at most a price you set, in
-    your store's currency (`15`, `15.99` and `15,99` all work)
-  - 🎯 **% or price** - either condition triggers the alert
-- **🔄 Check Now** - check all your games against Steam right now. Games that
-  match your alerts come first, then other discounts, biggest first.
-- **🌍 Region** - your current region shows as a flag on the button; tap to
-  change it any time.
+Prices are checked daily, and you're notified once when a game starts matching
+its alert, not every day the sale runs.
 
-Once a day the bot checks prices and messages you the first time a game starts
-matching its alert - once per sale, not every day it's still running. Several
-deals at once arrive as a single message.
+Limits: 10 games per person; Check Now once a minute.
 
-## Limits
+The bot stores only your chat ID, region, and tracked games with their alerts.
 
-- Up to 10 tracked games per person
-- Prices checked once a day; Check Now can be used once a minute
-- Changing region removes price alerts (they were in the old currency);
-  % alerts are kept
+## Self-hosting
 
-## A note on data
-
-The bot only stores what it needs to do its job: your Telegram chat ID, your
-chosen region, the games and alerts you set up, and when you last used Check
-Now. Nothing else.
-
----
-
-## Running your own copy
-
-Stack: TypeScript on [Vercel](https://vercel.com) serverless functions,
-[Supabase](https://supabase.com) Postgres, Telegram Bot API webhooks, and the
-public Steam store API. Node 20+.
-
-```
-api/webhook.ts       Telegram -> bot (verifies Telegram's secret token)
-api/cron.ts          daily price check (verifies CRON_SECRET)
-src/bot/             conversation handlers, message views, button payloads
-src/jobs/            the price-check job
-src/domain/          alert rules and input parsing (pure, heavily tested)
-src/steam/           Steam store client (batched price lookups)
-src/telegram/        Telegram client and formatting helpers
-src/db/              Repo interface + Supabase implementation
-test/                Vitest suite with in-memory fakes
-```
-
-### Setup
+TypeScript on Vercel + Supabase. Node 20+.
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and a Supabase project.
-2. In the Supabase SQL editor, run [`schema.sql`](schema.sql).
-3. Copy `.env.example` to `.env` and fill it in. Add the same variables to the
-   Vercel project (Settings -> Environment Variables).
-4. Deploy to Vercel, then register the webhook, commands and description:
+2. Run [`schema.sql`](schema.sql) in the Supabase SQL editor.
+3. Fill in `.env` from [`.env.example`](.env.example) and add the same
+   variables to your Vercel project.
+4. Deploy to Vercel, then register the webhook:
    ```bash
    npm install
    npm run setup:telegram -- https://your-project.vercel.app
    ```
 
-### Upgrading from v1 (the JavaScript version)
-
-1. Run [`migrations/002_v2.sql`](migrations/002_v2.sql) in the Supabase SQL editor.
-   It only adds things, so the old version keeps working until you deploy.
-2. Add `TELEGRAM_WEBHOOK_SECRET` to Vercel and your `.env`.
-3. Deploy, then run `npm run setup:telegram -- https://your-project.vercel.app`
-   so Telegram starts sending the secret. Until you do, the webhook rejects
-   Telegram's requests.
-4. Optional cleanup, once everything works: the commented lines at the end of
-   the migration drop the v1-only columns and the unused `price_cache` table.
-
-Users' tracked games and alerts carry over. Old keyboard buttons and command
-names (`/addgame`, `/checknow`, ...) keep working.
-
-### Development
-
-```bash
-npm run check        # typecheck + tests
-npm run test:watch
-```
-
-CI runs the same checks on every push and pull request.
+Run `npm run check` for typecheck and tests.
 
 ## Feedback / issues
 
